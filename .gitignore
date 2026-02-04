@@ -1,0 +1,4 @@
+/src/wasm-build/
+/build/
+/.idea/
+/node_modules/

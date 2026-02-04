@@ -1,0 +1,18 @@
+{
+  "name": "project",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "",
+  "main": "main.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server/server.js"
+  },
+  "keywords": [],
+  "author": "Stefan Ennemoser",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^5.1.0",
+    "fflate": "^0.8.2"
+  }
+}
