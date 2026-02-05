@@ -26,8 +26,6 @@
  *  - All operations assume a single active repository.
  */
 
-
-#include <git2.h>
 #include <assert.h>
 #include <emscripten/wasmfs.h>
 #include <emscripten/console.h>
@@ -38,23 +36,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <errno.h>
-
-/**
- * Currently opened Git repository.
- * Only a single repository is supported at a time.
- */
-static git_repository* curr_repo = NULL;
-
-/**
- * Circular buffer of commit OIDs collected during revision walking.
- * The indices are used as lightweight commit identifiers in JavaScript.
- */
-static git_oid oids[20];
-
-/**
- * Number of commits collected during the last walk.
- */
-static size_t commit_count;
+#include "libgit2_core.h"
 
 /**
  * Test function to verify OPFS write access from inside WebAssembly.
@@ -172,6 +154,8 @@ char* escape_json_string(const char* input, char* out, size_t out_size) {
     return out;
 }
 
+
+
 /**
  * Computes numeric diff statistics for a commit.
  *
@@ -183,6 +167,15 @@ char* escape_json_string(const char* input, char* out, size_t out_size) {
  */
 EMSCRIPTEN_KEEPALIVE
 char* get_commit_diff(int i){
+	core_diff_stat_t stats[64];
+    size_t count;
+
+    if(core_get_commit_diff_stats(i, stats, 64, &count) < 0){
+    	emscripten_console_error("There was an error calculating diff");
+    	return NULL;
+    }
+
+
     size_t bufsize = 65536;
     char* buffer = malloc(bufsize);
     if (!buffer){
@@ -191,107 +184,23 @@ char* get_commit_diff(int i){
     }
     buffer[0] = '\0';
 
-    git_commit *commit;
-    int err = git_commit_lookup(&commit, curr_repo, &oids[i]);
-    if(err != 0){
-        free(buffer);
-        print_error("error looking up commit");
-        return NULL;
-    }
-    unsigned int parentcount = git_commit_parentcount(commit);
 
     strcat(buffer, "[");
-    if (parentcount > 0){
-        git_diff *diff;
-        git_commit *parent;
-        git_tree *parent_tree, *child_tree;
-        git_diff_stats_format_t format = GIT_DIFF_STATS_NUMBER;
-        git_diff_stats *stats;
-        int sec_count = 0;
-        char *prim_tok, *sec_tok, *prim_save_ptr, *sec_save_ptr;
+    for (int j = 0; j<count; j++){
+    	char escaped_file[512];
+        escape_json_string(stats[j].file, escaped_file, sizeof(escaped_file));
 
 
-        err = git_commit_parent(&parent, commit, 0);
-        if(err != 0){
-            free(buffer);
-            print_error("error looking up parent");
-            git_commit_free(commit);
-            return NULL;
-        }
-
-
-        err = git_commit_tree(&parent_tree, parent);
-        git_commit_free(parent);
-        if(err != 0){
-            free(buffer);
-            git_commit_free(commit);
-            print_error("error looking up git tree of parent commit");
-            return NULL;
-        }
-
-        err = git_commit_tree(&child_tree, commit);
-        git_commit_free(commit);
-        if(err != 0){
-            git_tree_free(parent_tree);
-            free(buffer);
-            print_error("error looking up git tree of child commit");
-            return NULL;
-        }
-
-        err = git_diff_tree_to_tree(&diff, curr_repo, parent_tree, child_tree, NULL);
-        git_tree_free(parent_tree);
-        git_tree_free(child_tree);
-        if(err != 0){
-            free(buffer);
-            print_error("error getting diff between this commit and the parent commit");
-            return NULL;
-        }
-
-        err = git_diff_get_stats(&stats, diff);
-        git_diff_free(diff);
-        if(err != 0){
-            free(buffer);
-            print_error("error getting diff stats");
-            return NULL;
-        }
-
-        git_buf buf = GIT_BUF_INIT;
-        err = git_diff_stats_to_buf(&buf, stats, format, 0);
-        git_diff_stats_free(stats);
-        if(err != 0){
-            git_buf_dispose(&buf);
-            free(buffer);
-            print_error("error writing diff stats to buffer");
-            return NULL;
-        }
-
-        prim_tok = strtok_r(buf.ptr, "\n", &prim_save_ptr);
-        while(prim_tok != NULL){
-            char entry[1024];
-            char *tokens[3];
-
-            sec_tok = strtok_r(prim_tok, " ", &sec_save_ptr);
-            while(sec_tok != NULL){
-                tokens[sec_count++] = sec_tok;
-                sec_tok = strtok_r(NULL, " ", &sec_save_ptr);
-            }
-            sec_count = 0;
-
-			// Convert libgit2 diff stats into a JSON array
-            prim_tok = strtok_r(NULL, "\n", &prim_save_ptr);
-            snprintf(entry, sizeof(entry),
-                        "{\"additions\":\"%s\",\"deletions\":\"%s\",\"file_name\":\"%s\"}%s",
-                        tokens[0],
-                        tokens[1],
-                        tokens[2],
-                        (prim_tok == NULL) ? "" : ",");
-            strcat(buffer, entry);
-        }
-        git_buf_dispose(&buf);
-
-
+    	char entry[1024];
+		// Convert libgit2 diff stats into a JSON array
+		snprintf(entry, sizeof(entry),
+					"{\"additions\":%u,\"deletions\":%u,\"file_name\":\"%s\"}%s",
+					stats[j].additions,
+					stats[j].deletions,
+					escaped_file,
+					(j+1 >= count) ? "" : ",");
+		strcat(buffer, entry);
     }
-
     strcat(buffer, "]");
 
     return buffer;
@@ -313,54 +222,36 @@ char* get_commit_diff(int i){
  * The returned buffer must be freed by JavaScript.
  */
 EMSCRIPTEN_KEEPALIVE
-char* get_commit_info(){
-	emscripten_console_log("getting commit info...");
-	int count = 0;
-	size_t bufsize = 65536;
-	char* buffer = malloc(bufsize);
-	if (!buffer){
-		emscripten_console_error("error allocating memory to buffer");
-		return NULL;
-	}
-	
-	strcpy(buffer, "[");
-	while(count++ < commit_count){
-		char entry[1024];
-		git_commit *commit;
-		int err = git_commit_lookup( &commit, curr_repo, &oids[count-1]);
-		if(err != 0){
-		    free(buffer);
-			print_error("error looking up commit");
-			return NULL;
-		}
+char *get_commit_info() {
+    size_t count = core_commit_count();
+    char *buffer = malloc(65536);
+    strcpy(buffer, "[");
 
-		const git_signature* sig = git_commit_author(commit);
-		unsigned int parentcount = git_commit_parentcount(commit);
-		const char* msg = git_commit_message(commit);
-		git_commit_free(commit);
+    for (size_t i = 0; i < count; i++) {
+        core_commit_info_t info;
+        core_get_commit_info(i, &info);
 
-		char escaped_msg[1024];
-		escape_json_string(msg, escaped_msg, sizeof(escaped_msg));
+        char escaped[1024];
+        escape_json_string(info.message, escaped, sizeof(escaped));
 
+        char entry[1024];
+        snprintf(entry, sizeof(entry),
+            "{\"author\":\"%s\",\"email\":\"%s\",\"message\":\"%s\","
+            "\"parents\":%u,\"oid\":%zu}%s",
+            info.author,
+            info.email,
+            escaped,
+            info.parent_count,
+            i,
+            (i + 1 == count) ? "" : ",");
 
-		snprintf(entry, sizeof(entry),
-			"{\"author\":\"%s\",\"email\":\"%s\",\"message\":\"%s\",\"parents\":%u,\"oid\":%d}%s",
-			sig->name,
-			sig->email,
-			escaped_msg,
-			parentcount,
-			count-1,
-			(count == commit_count) ? "" : ",");
+        strcat(buffer, entry);
+    }
 
-		strcat(buffer, entry);
-
-
-	}
-
-	strcat(buffer, "]");
-	emscripten_console_log("successfully got commit info");
-	return buffer;
+    strcat(buffer, "]");
+    return buffer;
 }
+
 
 /**
  * Opens a Git repository stored inside OPFS.
@@ -375,8 +266,7 @@ int open_repo(const char *name){
 
 	int error;
 
-	//TODO use assert
-	error = git_repository_open(&curr_repo, path);
+	error = core_open_repo(path);
 
 	if (error < 0) {
         	
@@ -386,7 +276,6 @@ int open_repo(const char *name){
         	print_error(msg);
 		return -1;
 	}
-
 	return 0;
 }
 
@@ -401,27 +290,13 @@ int open_repo(const char *name){
 EMSCRIPTEN_KEEPALIVE
 int walk_commits(){
 	emscripten_console_log("trying to walk through commits...");
-	git_revwalk *walker;
-	int err = git_revwalk_new(&walker, curr_repo);
+
+	int err = core_walk_commits();
 	if(err != 0){
-		print_error("error creating revision walker");
+		emscripten_console_error("error when walking through commits");
 		return -1;
 	}
 
-	err = git_revwalk_push_head(walker);
-	if(err != 0){
-		print_error("error pushing head of repository");
-		return -1;
-	}
-
-	
-	git_oid oid;
-	commit_count = 0;
-	while(git_revwalk_next(&oids[commit_count], walker) == 0 && ++commit_count < 20){
-	}
-	
-	git_revwalk_free(walker);
-	
 	return 0;
 }
 
@@ -432,7 +307,7 @@ int walk_commits(){
  */
 int init() {
 	emscripten_console_log("initializing...");
-	int res = git_libgit2_init();
+	int res = core_init();
 	char buf[64];
 	snprintf(buf, sizeof(buf), "init: %d", res);
 	emscripten_console_log(buf);
@@ -443,7 +318,5 @@ int init() {
  * Shuts down libgit2 and releases global resources.
  */
 int shutdown(){
-	git_repository_free(curr_repo);
-	git_libgit2_shutdown();
-	return 0;
+	return core_shutdown();
 }

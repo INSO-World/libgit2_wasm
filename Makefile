@@ -2,7 +2,8 @@
 LIB_ROOT ?= $(error LIB_ROOT is not set)
 BUILD_DIR := ./build
 
-PROJECT_SRC := src\wasm/libgit2_wasm.c
+NATIVE_SRC := src/c/libgit2_core.c
+PROJECT_SRC := src/c/libgit2_wasm.c src/c/libgit2_core.c
 LIBGIT2_A := $(BUILD_DIR)/libgit2.a
 OUTPUT := src/wasm-build/libgit2_wasm.js
 
@@ -49,6 +50,9 @@ wasm: build
 		-I "$(LIB_ROOT)/include" \
 		-o $(OUTPUT) \
 		$(EMCC_FLAGS)
+
+native: $(NATIVE_SRC)
+	gcc -Wall -pthread $(NATIVE_SRC) -lgit2 -o build/libgit2_native
 
 run: wasm
 	npm start
