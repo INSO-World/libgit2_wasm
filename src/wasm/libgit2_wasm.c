@@ -1,3 +1,32 @@
+/**
+ * libgit2_wasm.c
+ *
+ * WebAssembly interface layer for libgit2.
+ *
+ * This file exposes a minimal C API that can be called from JavaScript
+ * via Emscripten's ccall interface.
+ *
+ * Responsibilities:
+ *  - initialize and shut down libgit2
+ *  - mount the Origin Private File System (OPFS) inside the WASM runtime
+ *  - open Git repositories stored in OPFS
+ *  - walk commits and extract commit metadata
+ *  - compute lightweight diff statistics
+ *
+ * Design notes:
+ *  - OPFS is mounted using wasmfs and must be initialized before any
+ *    filesystem access from libgit2.
+ *  - Data returned to JavaScript is serialized as JSON strings.
+ *  - Memory ownership of returned buffers is transferred to JavaScript,
+ *    which is responsible for freeing them.
+ *
+ * Limitations:
+ *  - Only a fixed number of commits is stored (currently 20).
+ *  - Diff information is limited to numeric statistics.
+ *  - All operations assume a single active repository.
+ */
+
+
 #include <git2.h>
 #include <assert.h>
 #include <emscripten/wasmfs.h>
@@ -10,10 +39,33 @@
 #include <string.h>
 #include <errno.h>
 
+/**
+ * Currently opened Git repository.
+ * Only a single repository is supported at a time.
+ */
 static git_repository* curr_repo = NULL;
-static git_oid oids[20]; 
+
+/**
+ * Circular buffer of commit OIDs collected during revision walking.
+ * The indices are used as lightweight commit identifiers in JavaScript.
+ */
+static git_oid oids[20];
+
+/**
+ * Number of commits collected during the last walk.
+ */
 static size_t commit_count;
 
+/**
+ * Test function to verify OPFS write access from inside WebAssembly.
+ *
+ * Creates or overwrites a file inside /opfs/repo and writes the given
+ * message into it.
+ *
+ * This function is primarily used to validate that:
+ *  - OPFS is mounted correctly
+ *  - file I/O works from within the WASM runtime
+ */
 EMSCRIPTEN_KEEPALIVE
 void test_write(const char *msg, const char *name) {
 	char path[256];
@@ -30,6 +82,11 @@ void test_write(const char *msg, const char *name) {
 	close(fd);
 }
 
+/**
+ * Prints the last libgit2 error to the JavaScript console.
+ *
+ * @param msg Contextual error message
+ */
 void print_error(char *msg){
 	const git_error *e = git_error_last();
 	char err[512];
@@ -38,6 +95,13 @@ void print_error(char *msg){
 	emscripten_console_error(err); 
 }
 
+/**
+ * Mounts OPFS into the WASM virtual filesystem.
+ *
+ * This function runs in a separate thread because wasmfs requires
+ * filesystem setup to occur outside of the main execution path.
+ *
+ */
 void* mount_opfs(void* arg){
 	emscripten_console_log("mounting opfs..."); 
 	backend_t opfs = wasmfs_create_opfs_backend();
@@ -59,6 +123,12 @@ void* mount_opfs(void* arg){
 	return NULL;
 }
 
+/**
+ * Spawns a detached thread that mounts OPFS.
+ *
+ * This function must be called from JavaScript before any filesystem
+ * access through libgit2.
+ */
 EMSCRIPTEN_KEEPALIVE
 void mount_opfs_in_thread() {
     pthread_t t;
@@ -66,6 +136,15 @@ void mount_opfs_in_thread() {
     pthread_detach(t);
 }
 
+/**
+ * Escapes a C string for safe inclusion in a JSON string.
+ *
+ * @param input     Original string
+ * @param out       Output buffer
+ * @param out_size  Size of output buffer
+ *
+ * @return Pointer to the output buffer
+ */
 EMSCRIPTEN_KEEPALIVE
 char* escape_json_string(const char* input, char* out, size_t out_size) {
     size_t j = 0;
@@ -93,6 +172,15 @@ char* escape_json_string(const char* input, char* out, size_t out_size) {
     return out;
 }
 
+/**
+ * Computes numeric diff statistics for a commit.
+ *
+ * @param i Index into the commit OID array
+ *
+ * @return JSON array string containing diff statistics
+ *
+ * The returned buffer is heap-allocated and must be freed by JavaScript.
+ */
 EMSCRIPTEN_KEEPALIVE
 char* get_commit_diff(int i){
     size_t bufsize = 65536;
@@ -189,6 +277,7 @@ char* get_commit_diff(int i){
             }
             sec_count = 0;
 
+			// Convert libgit2 diff stats into a JSON array
             prim_tok = strtok_r(NULL, "\n", &prim_save_ptr);
             snprintf(entry, sizeof(entry),
                         "{\"additions\":\"%s\",\"deletions\":\"%s\",\"file_name\":\"%s\"}%s",
@@ -208,6 +297,21 @@ char* get_commit_diff(int i){
     return buffer;
 }
 
+
+/**
+ * Returns metadata for all commits collected during the last revision walk.
+ *
+ * Each entry contains:
+ *  - author name
+ *  - author email
+ *  - commit message
+ *  - number of parent commits
+ *  - index-based commit identifier
+ *
+ * @return JSON array string
+ *
+ * The returned buffer must be freed by JavaScript.
+ */
 EMSCRIPTEN_KEEPALIVE
 char* get_commit_info(){
 	emscripten_console_log("getting commit info...");
@@ -258,6 +362,13 @@ char* get_commit_info(){
 	return buffer;
 }
 
+/**
+ * Opens a Git repository stored inside OPFS.
+ *
+ * @param name Name of the repository directory inside /opfs/repo
+ *
+ * @return 0 on success, -1 on failure
+ */
 int open_repo(const char *name){
 	char path[256];
 	snprintf(path, sizeof(path), "/opfs/repo/%s", name);
@@ -279,6 +390,14 @@ int open_repo(const char *name){
 	return 0;
 }
 
+/**
+ * Walks the commit history starting from HEAD.
+ *
+ * Collects up to a fixed maximum number of commits and stores their
+ * object IDs in a global array for later access.
+ *
+ * @return 0 on success, -1 on failure
+ */
 EMSCRIPTEN_KEEPALIVE
 int walk_commits(){
 	emscripten_console_log("trying to walk through commits...");
@@ -306,8 +425,11 @@ int walk_commits(){
 	return 0;
 }
 
-
-
+/**
+ * Initializes the libgit2 library.
+ *
+ * Must be called once before any other libgit2 operations.
+ */
 int init() {
 	emscripten_console_log("initializing...");
 	int res = git_libgit2_init();
@@ -317,6 +439,9 @@ int init() {
 	return 0;
 }
 
+/**
+ * Shuts down libgit2 and releases global resources.
+ */
 int shutdown(){
 	git_repository_free(curr_repo);
 	git_libgit2_shutdown();

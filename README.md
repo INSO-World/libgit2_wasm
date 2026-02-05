@@ -69,7 +69,7 @@ project-root/
 │  ├─ js/
 │  │  │
 │  │  ├─ opfs/                 # OPFS file handling
-│  │  │  └─ fileAccess.js
+│  │  │  └─ opfsStorage.js
 │  │  │
 │  │  └─ main.js               # Application entry point
 │  │

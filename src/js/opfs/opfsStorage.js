@@ -1,6 +1,26 @@
-import {DIRECTORY} from "../main.js";
+/**
+ * opfsStorage.js
+ *
+ * Handles interaction with the Origin Private File System (OPFS).
+ * This module is responsible for:
+ *  - uploading files and directory structures into OPFS
+ *  - listing already uploaded repositories
+ *
+ * This file does NOT interact with WebAssembly or libgit2 directly.
+ */
 
+/**
+ * Name of the directory inside OPFS where repositories are stored.
+ */
+import { DIRECTORY } from "../config.js";
 
+/**
+ * Uploads one or more files (or an entire directory) selected by the user
+ * into the OPFS repository directory.
+ *
+ * The directory structure of the uploaded files is preserved using
+ * `webkitRelativePath`.
+ */
 export async function uploadFile() {
     const input = document.getElementById("upload");
     const files = Array.from(input.files);
@@ -28,30 +48,22 @@ export async function uploadFile() {
     window.location.reload();
 }
 
-export async function showExistingFiles() {
-    const directoryHandle = await (await navigator.storage.getDirectory()).getDirectoryHandle(DIRECTORY);
-    const fileTable = document.getElementById('file-table');
-    if (directoryHandle.keys().length !== 0) {
-        const h2 = document.createElement('h2');
-        h2.id = "file-table-h2"
-        h2.className = "subheading"
-        h2.textContent = "Uploaded files";
-        fileTable.appendChild(h2);
 
-        for await (let name of directoryHandle.keys()) {
-            const div = document.createElement('div');
-            div.className = "file-table-file";
-            const p = document.createElement('p');
-            p.textContent = name;
-            div.appendChild(p);
-            const button = document.createElement('button');
-            button.textContent = "select";
-            button.onclick = () => openRepo(name);
 
-            div.appendChild(button);
-            fileTable.appendChild(div);
-        }
+/**
+ * Returns a list of existing repositories stored in OPFS.
+ *
+ * Each key in the top level directory is added to the list.
+ */
+export async function listRepositories() {
+    const root = await navigator.storage.getDirectory();
+    const repoDir = await root.getDirectoryHandle(DIRECTORY, { create: false });
+
+    const repos = [];
+    for await (const name of repoDir.keys()) {
+        repos.push(name);
     }
+    return repos;
 }
 
 

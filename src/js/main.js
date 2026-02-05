@@ -1,14 +1,44 @@
-import {uploadFile, showExistingFiles} from './opfs/fileAccess.js';
+/**
+ * main.js
+ *
+ * Browser-side entry point of the application.
+ * This file coordinates:
+ *  - OPFS setup
+ *  - interaction with the libgit2 WebAssembly module
+ *  - DOM updates for repository and commit information
+ *
+ * Low-level OPFS logic is delegated to fileAccess.js.
+ * Low-level WASM interaction happens through Emscripten's ccall interface.
+ */
+
+import {uploadFile, listRepositories} from './opfs/opfsStorage.js';
 import createModule from '../wasm-build/libgit2_wasm.js'
 
+/**
+ * Initialize the libgit2 WebAssembly module.
+ * This loads the WASM binary, starts worker threads,
+ * and prepares exported C functions for use via ccall.
+ */
 const LibGit2Module = await createModule();
-export const DIRECTORY = "repo";
 
+/**
+ * Name of the directory inside OPFS where repositories are stored.
+ */
+import { DIRECTORY } from "./config.js";
+
+/**
+ * Expose selected functions globally for use in HTML event handlers.
+ * This avoids inline module imports inside index.html.
+ */
 window.uploadFile = uploadFile;
 window.testWrite = testWrite;
-window.showExistingFiles = showExistingFiles;
+window.listRepositories = listRepositories;
 window.openRepo = openRepo;
 
+/**
+ * Initializes the Origin Private File System (OPFS).
+ * Creates the repository root directory if it does not yet exist.
+ */
 async function setupOPFS() {
     const opfsRoot = await navigator.storage.getDirectory();
     console.log(opfsRoot);
@@ -20,6 +50,10 @@ async function setupOPFS() {
 }
 
 
+/**
+ * Simple test function to verify OPFS writes from WASM.
+ * Calls a C function that writes a file using OPFS-backed APIs.
+ */
 function testWrite() {
     console.log("trying to write to OPFS");
     LibGit2Module.ccall(
@@ -29,8 +63,16 @@ function testWrite() {
         ["it works!!!!", "newFile"]
     )
 }
-
-//TODO  run in thread and test debugging methods (emscripten_console_log doesn't work)
+/**
+ * Opens a Git repository using libgit2 inside WebAssembly.
+ *
+ * @param {string} name - Path to the repository inside OPFS
+ *
+ * NOTE:
+ * This currently runs on the main thread.
+ * A future improvement would be executing this in a worker thread
+ * and improving debugging support.
+ */
 export function openRepo(name) {
     console.log("opening repository: " + name + " ...");
 
@@ -47,6 +89,12 @@ export function openRepo(name) {
     walkCommits(name);
 }
 
+/**
+ * Displays or toggles the diff for a specific commit.
+ *
+ * @param {number} oid   - Commit object ID
+ * @param {number} count - Commit index used for DOM lookup
+ */
 export function calcDiff(oid, count) {
     console.log("diff"+String(count));
     const el = document.getElementById("diff" + String(count))
@@ -60,7 +108,7 @@ export function calcDiff(oid, count) {
             [oid]
         )
         const str = LibGit2Module.UTF8ToString(ptr);
-        LibGit2Module._free();
+        LibGit2Module._free(ptr);
 
         const diff = JSON.parse(str);
         console.log(diff);
@@ -105,6 +153,10 @@ export function calcDiff(oid, count) {
     }
 }
 
+/**
+ * Walks through repository commits using libgit2
+ * and renders them into an HTML table.
+ */
 function walkCommits() {
     const res = LibGit2Module.ccall(
         "walk_commits",
@@ -188,12 +240,53 @@ function walkCommits() {
     commitTable.appendChild(table);
 }
 
+/**
+ * Creates HTML elements for the repositories uploaded.
+ *
+ * Each Repository is one line in the table.
+ */
+async function showFiles(repos){
+    if(repos.length !== 0){
 
-setupOPFS().then(r => {
-    showExistingFiles().then()
+        const fileTable = document.getElementById('file-table');
+        const h2 = document.createElement('h2');
+        h2.id = "file-table-h2"
+        h2.className = "subheading"
+        h2.textContent = "Uploaded files";
+        fileTable.appendChild(h2);
+
+        repos.forEach(name => {
+            const div = document.createElement('div');
+            div.className = "file-table-file";
+            const p = document.createElement('p');
+            p.textContent = name;
+            div.appendChild(p);
+            const button = document.createElement('button');
+            button.textContent = "select";
+            button.onclick = () => openRepo(name);
+
+            div.appendChild(button);
+            fileTable.appendChild(div);
+        });
+    }
+}
+
+/**
+ * Application startup sequence:
+ *  1. Initialize OPFS
+ *  2. Display existing files
+ *  3. Initialize libgit2
+ *  4. Mount OPFS inside the WASM runtime (worker thread)
+ */
+(async function startup() {
+    await setupOPFS();
+
+    const repos = await listRepositories();
+    showFiles(repos);
+
     LibGit2Module._init();
     LibGit2Module._mount_opfs_in_thread();
-});
+})();
 
 
 
