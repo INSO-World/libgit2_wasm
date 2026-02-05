@@ -24,9 +24,12 @@ EMCC_FLAGS := \
 	-sPTHREAD_POOL_SIZE=4
 
 # ---- Targets ----
-.PHONY: all clean configure build
+.PHONY: all npm-install clean configure build wasm run
 
-all: run
+all: npm-install run
+
+npm-install:
+	npm install
 
 clean:
 	rmdir /s /q "$(BUILD_DIR)" 2>nul || exit 0
