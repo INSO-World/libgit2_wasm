@@ -1,6 +1,8 @@
 #pragma once
 #include <git2.h>
 #include <stddef.h>
+#include <stdio.h>
+#include <string.h>
 
 #define CORE_MAX_COMMITS 20
 #define CORE_MAX_DIFFS   128

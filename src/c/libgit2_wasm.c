@@ -31,10 +31,8 @@
 #include <emscripten/console.h>
 #include <emscripten/emscripten.h>
 #include <emscripten/threading.h>
-#include <stdio.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <string.h>
 #include <errno.h>
 #include "libgit2_core.h"
 
@@ -189,7 +187,7 @@ char* get_commit_diff(int i){
     for (int j = 0; j<count; j++){
     	char escaped_file[512];
         escape_json_string(stats[j].file, escaped_file, sizeof(escaped_file));
-
+        free((char*)stats[j].file);
 
     	char entry[1024];
 		// Convert libgit2 diff stats into a JSON array
