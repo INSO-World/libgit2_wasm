@@ -76,8 +76,6 @@ int core_walk_commits(){
 		return err;
 	}
 
-
-	git_oid oid;
 	commit_count = 0;
 	while(git_revwalk_next(&oids[commit_count], walker) == 0 && ++commit_count < CORE_MAX_COMMITS){
 	}

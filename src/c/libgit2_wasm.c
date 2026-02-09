@@ -318,3 +318,4 @@ int init() {
 int shutdown(){
 	return core_shutdown();
 }
+

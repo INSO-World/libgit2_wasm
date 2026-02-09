@@ -207,3 +207,30 @@ int init() {
 int shutdown(){
     return core_shutdown();
 }
+
+int main(int argc, char* argv[]){
+    if(argc < 2 || argc > 3){
+        printf("Usage: %s <repo-path> [iterations]", argv[0] );
+        return 1;
+    }
+    int iterations = (argc >= 3) ? atoi(argv[2]) : 1;
+    if(iterations <= 0) iterations = 1;
+
+    init();
+
+    for (int i = 0; i<iterations; i++) {
+        if(open_repo(argv[1])) break;
+
+        if(walk_commits()) break;
+
+        char *info = get_commit_info();
+        free(info);
+        int commit_count = core_commit_count();
+        for (size_t c = 0; c < commit_count; c++) {
+            char *diff = get_commit_diff((int) c);
+            free(diff);
+        }
+    }
+    shutdown();
+    return 0;
+}

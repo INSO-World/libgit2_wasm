@@ -2,10 +2,12 @@
 LIB_ROOT ?= $(error LIB_ROOT is not set)
 BUILD_DIR := ./build
 
-NATIVE_SRC := src/c/libgit2_core.c
+NATIVE_SRC := src/c/libgit2_core.c src/c/libgit2_native.c
 PROJECT_SRC := src/c/libgit2_wasm.c src/c/libgit2_core.c
-LIBGIT2_A := $(BUILD_DIR)/libgit2.a
-OUTPUT := src/wasm-build/libgit2_wasm.js
+WASM_LIBGIT2_A := $(BUILD_DIR)/libgit2.a
+NATIVE_LIBGIT2_A := native-build/libgit2.dll.a
+WASM_OUTPUT := src/wasm-build/libgit2_wasm.js
+NATIVE_OUTPUT := src/native-build/libgit2_native
 
 CMAKE_FLAGS := \
 	-DUSE_HTTPS=OFF \
@@ -46,13 +48,16 @@ build: configure
 
 wasm: build
 	emcc $(PROJECT_SRC) \
-		$(LIBGIT2_A) \
+		$(WASM_LIBGIT2_A) \
 		-I "$(LIB_ROOT)/include" \
-		-o $(OUTPUT) \
+		-o $(WASM_OUTPUT) \
 		$(EMCC_FLAGS)
 
-native: $(NATIVE_SRC)
-	gcc -Wall -pthread $(NATIVE_SRC) -lgit2 -o build/libgit2_native
+native: 
+	gcc -Wall $(NATIVE_SRC) \
+		$(NATIVE_LIBGIT2_A) \
+		-I "$(LIB_ROOT)/include" \
+		-o $(NATIVE_OUTPUT)
 
 run: wasm
 	npm start
