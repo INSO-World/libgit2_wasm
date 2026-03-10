@@ -4,8 +4,10 @@ BUILD_DIR := ./build
 
 NATIVE_SRC := src/c/libgit2_core.c src/c/libgit2_native.c
 PROJECT_SRC := src/c/libgit2_wasm.c src/c/libgit2_core.c
+
 WASM_LIBGIT2_A := $(BUILD_DIR)/libgit2.a
 NATIVE_LIBGIT2_A := native-build/libgit2.dll.a
+
 WASM_OUTPUT := src/wasm-build/libgit2_wasm.js
 NATIVE_OUTPUT := src/native-build/libgit2_native
 
@@ -22,6 +24,7 @@ EMCC_FLAGS := \
 	-sEXPORTED_RUNTIME_METHODS='["ccall","cwrap","UTF8ToString"]' \
 	-sMODULARIZE \
 	-sEXPORT_ES6 \
+	-sALLOW_MEMORY_GROWTH \
 	-sSTACK_SIZE=524288 \
 	-sUSE_PTHREADS \
 	-sPTHREAD_POOL_SIZE=4

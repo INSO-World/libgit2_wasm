@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#define CORE_MAX_COMMITS 20
+#define CORE_MAX_COMMITS 128
 #define CORE_MAX_DIFFS   128
 
 typedef struct {

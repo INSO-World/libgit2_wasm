@@ -1,5 +1,6 @@
 #include "libgit2_core.h"
 #include<stdlib.h>
+#include <time.h>
 
 void print_error(char *msg);
 
@@ -103,23 +104,31 @@ char* get_commit_diff(int i){
  */
 char *get_commit_info() {
     size_t count = core_commit_count();
-    char *buffer = malloc(65536);
+    char *buffer = malloc(8388608);
+
+    if(count > 1000) count = 1000;
+
     strcpy(buffer, "[");
 
     for (size_t i = 0; i < count; i++) {
         core_commit_info_t info;
         core_get_commit_info(i, &info);
 
-        char escaped[1024];
-        escape_json_string(info.message, escaped, sizeof(escaped));
+        char escaped_msg[4096];
+        char escaped_author[512];
+        char escaped_email[512];
 
-        char entry[1024];
+        escape_json_string(info.message, escaped_msg, sizeof(escaped_msg));
+        escape_json_string(info.author, escaped_author, sizeof(escaped_author));
+        escape_json_string(info.email, escaped_email, sizeof(escaped_email));
+
+        char entry[8192];
         snprintf(entry, sizeof(entry),
                  "{\"author\":\"%s\",\"email\":\"%s\",\"message\":\"%s\","
                  "\"parents\":%u,\"oid\":%zu}%s",
-                 info.author,
-                 info.email,
-                 escaped,
+                 escaped_author,
+                 escaped_email,
+                 escaped_msg,
                  info.parent_count,
                  i,
                  (i + 1 == count) ? "" : ",");
@@ -140,8 +149,6 @@ char *get_commit_info() {
  * @return 0 on success, -1 on failure
  */
 int walk_commits(){
-    printf("trying to walk through commits...");
-
     int err = core_walk_commits();
     if(err != 0){
         char msg[512];
@@ -195,9 +202,7 @@ int open_repo(const char *name){
  * Must be called once before any other libgit2 operations.
  */
 int init() {
-    printf("initializing...");
-    int res = core_init();
-    printf("init: %d", res);
+    core_init();
     return 0;
 }
 
@@ -208,6 +213,11 @@ int shutdown(){
     return core_shutdown();
 }
 
+static double ms_elapsed(struct timespec start, struct timespec end) {
+    return (end.tv_sec - start.tv_sec) * 1000.0 +
+           (end.tv_nsec - start.tv_nsec) / 1e6;
+}
+
 int main(int argc, char* argv[]){
     if(argc < 2 || argc > 3){
         printf("Usage: %s <repo-path> [iterations]", argv[0] );
@@ -216,20 +226,46 @@ int main(int argc, char* argv[]){
     int iterations = (argc >= 3) ? atoi(argv[2]) : 1;
     if(iterations <= 0) iterations = 1;
 
+    struct timespec t0,t1;
+	clock_gettime(CLOCK_MONOTONIC,&t0);
     init();
+    clock_gettime(CLOCK_MONOTONIC,&t1);
+    FILE *finit = fopen("bench_init.csv", "w");
+    FILE *fruns = fopen("bench_runs.csv", "w");
+	double init_ms = ms_elapsed(t0,t1);
+	fprintf(finit, "init\n");
+	fprintf(finit, "%f",init_ms);
+	fprintf(finit, "%f",init_ms);
 
+    fprintf(fruns, "iteration,open_repo_ms,walk_commits_ms,get_commit_info_ms,diff_total_ms\n");
     for (int i = 0; i<iterations; i++) {
+    	clock_gettime(CLOCK_MONOTONIC,&t0);
         if(open_repo(argv[1])) break;
+        clock_gettime(CLOCK_MONOTONIC,&t1);
+        double open_repo_ms = ms_elapsed(t0,t1);
 
+        clock_gettime(CLOCK_MONOTONIC,&t0);
         if(walk_commits()) break;
+		clock_gettime(CLOCK_MONOTONIC,&t1);
+		double walk_commits_ms = ms_elapsed(t0,t1);
 
+		clock_gettime(CLOCK_MONOTONIC,&t0);
         char *info = get_commit_info();
         free(info);
+        clock_gettime(CLOCK_MONOTONIC,&t1);
+        double get_commit_info_ms = ms_elapsed(t0,t1);
+
+        clock_gettime(CLOCK_MONOTONIC,&t0);
         int commit_count = core_commit_count();
         for (size_t c = 0; c < commit_count; c++) {
             char *diff = get_commit_diff((int) c);
             free(diff);
         }
+        clock_gettime(CLOCK_MONOTONIC,&t1);
+        double diff_total_ms = ms_elapsed(t0,t1);
+
+        fprintf(fruns, "%d, %f, %f, %f, %f\n",i, open_repo_ms,walk_commits_ms, get_commit_info_ms, diff_total_ms );
+
     }
     shutdown();
     return 0;

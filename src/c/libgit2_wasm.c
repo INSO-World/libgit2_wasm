@@ -35,6 +35,13 @@
 #include <unistd.h>
 #include <errno.h>
 #include "libgit2_core.h"
+#include <stdatomic.h>
+
+/**
+* flag that describes whether the mounting processed has finished or not.
+* is 0 if it hasn't finished and 1 if it has.
+**/
+static atomic_int opfs_ready = 0;
 
 /**
  * Test function to verify OPFS write access from inside WebAssembly.
@@ -100,7 +107,16 @@ void* mount_opfs(void* arg){
         return NULL;
     }
 	emscripten_console_log("successfully created OPFS directory");
+	atomic_store(&opfs_ready, 1);
 	return NULL;
+}
+
+/**
+* returns opfs_ready
+**/
+EMSCRIPTEN_KEEPALIVE
+int is_opfs_ready() {
+    return atomic_load(&opfs_ready);
 }
 
 /**
@@ -204,6 +220,11 @@ char* get_commit_diff(int i){
     return buffer;
 }
 
+EMSCRIPTEN_KEEPALIVE
+size_t commit_count(){
+	return core_commit_count();
+}
+
 
 /**
  * Returns metadata for all commits collected during the last revision walk.
@@ -221,24 +242,32 @@ char* get_commit_diff(int i){
  */
 EMSCRIPTEN_KEEPALIVE
 char *get_commit_info() {
-    size_t count = core_commit_count();
-    char *buffer = malloc(65536);
+    size_t count = commit_count();
+    char *buffer = malloc(8388608);
+
+    if(count > 1000) count = 1000;
+
     strcpy(buffer, "[");
 
     for (size_t i = 0; i < count; i++) {
         core_commit_info_t info;
         core_get_commit_info(i, &info);
 
-        char escaped[1024];
-        escape_json_string(info.message, escaped, sizeof(escaped));
+        char escaped_msg[4096];
+        char escaped_author[512];
+        char escaped_email[512];
 
-        char entry[1024];
+        escape_json_string(info.message, escaped_msg, sizeof(escaped_msg));
+        escape_json_string(info.author, escaped_author, sizeof(escaped_author));
+        escape_json_string(info.email, escaped_email, sizeof(escaped_email));
+
+        char entry[8192];
         snprintf(entry, sizeof(entry),
             "{\"author\":\"%s\",\"email\":\"%s\",\"message\":\"%s\","
             "\"parents\":%u,\"oid\":%zu}%s",
-            info.author,
-            info.email,
-            escaped,
+            escaped_author,
+            escaped_email,
+            escaped_msg,
             info.parent_count,
             i,
             (i + 1 == count) ? "" : ",");

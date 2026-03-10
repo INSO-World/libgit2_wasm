@@ -181,7 +181,7 @@ int core_get_commit_diff_stats(
 
             out[count].additions = (uint32_t)adds;
             out[count].deletions = (uint32_t)dels;
-            out[count].file      =  strdup(delta->new_file.path);
+            out[count].file = strdup(delta->new_file.path);
             count++;
 
             git_patch_free(patch);
