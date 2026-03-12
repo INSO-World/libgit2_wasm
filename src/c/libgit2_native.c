@@ -219,23 +219,38 @@ static double ms_elapsed(struct timespec start, struct timespec end) {
 }
 
 int main(int argc, char* argv[]){
-    if(argc < 2 || argc > 3){
-        printf("Usage: %s <repo-path> [iterations]", argv[0] );
+    if(argc < 3 || argc > 4){
+        printf("Usage: %s <repo-path> <output-file> [iterations]", argv[0] );
         return 1;
     }
-    int iterations = (argc >= 3) ? atoi(argv[2]) : 1;
+    int iterations = (argc >= 4) ? atoi(argv[3]) : 1;
     if(iterations <= 0) iterations = 1;
+
+	char *output_file = argv[2];
+	char runs_file[256];
+	char init_file[256];
+
+	snprintf(runs_file, sizeof(runs_file), "%s_runs.csv", output_file);
+	snprintf(init_file, sizeof(init_file), "%s_init.csv", output_file);
+
+	FILE *finit = fopen(init_file, "a");
+    FILE *fruns = fopen(runs_file, "w");
 
     struct timespec t0,t1;
 	clock_gettime(CLOCK_MONOTONIC,&t0);
     init();
     clock_gettime(CLOCK_MONOTONIC,&t1);
-    FILE *finit = fopen("bench_init.csv", "w");
-    FILE *fruns = fopen("bench_runs.csv", "w");
+
 	double init_ms = ms_elapsed(t0,t1);
-	fprintf(finit, "init\n");
-	fprintf(finit, "%f",init_ms);
-	fprintf(finit, "%f",init_ms);
+
+	//check whether initialization file is empty or not
+	fseek(finit, 0, SEEK_END);
+	long size = ftell(finit);
+	if(size == 0){
+		fprintf(finit, "init\n");
+	}
+
+	fprintf(finit, "%f\n",init_ms);
 
     fprintf(fruns, "iteration,open_repo_ms,walk_commits_ms,get_commit_info_ms,diff_total_ms\n");
     for (int i = 0; i<iterations; i++) {
