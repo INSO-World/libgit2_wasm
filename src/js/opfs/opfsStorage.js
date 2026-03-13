@@ -22,12 +22,15 @@ import { DIRECTORY } from "../config.js";
  * `webkitRelativePath`.
  */
 export async function uploadFile() {
+    console.log("uploading to opfs");
     const input = document.getElementById("upload");
     const files = Array.from(input.files);
 
     const directoryHandle = await (await navigator.storage.getDirectory()).getDirectoryHandle(DIRECTORY, {create: true});
-
+    let count = 0;
+    const num = files.length;
     for (const file of files) {
+        console.log(++count+"/"+num);
         // file.webkitRelativePath gives the path relative to the selected folder
         const relativePath = file.webkitRelativePath;
         const parts = relativePath.split("/").filter(Boolean);
@@ -40,10 +43,14 @@ export async function uploadFile() {
         const fileName = parts[parts.length - 1];
         const fileHandle = await currentDir.getFileHandle(fileName, {create: true});
         const writable = await fileHandle.createWritable();
-        await writable.write(await file.arrayBuffer());
-        await writable.close();
+        if (file.size > 10 * 1024 * 1024) {
+            const stream = file.stream();
+            await stream.pipeTo(writable);
+        } else {
+            await writable.write(await file.arrayBuffer());
+            await writable.close();
+        }
     }
-
     console.log("Directory uploaded to OPFS:", DIRECTORY);
     window.location.reload();
 }

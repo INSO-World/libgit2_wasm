@@ -361,6 +361,7 @@ function downloadCSV(bench) {
 }
 
 export async function runBenchmark(repoPath, iterations = 100) {
+    bench.runs = [];
     bench.iterations = iterations;
     for (let i = 0; i < iterations; i++) {
         const run = {};
