@@ -53,7 +53,6 @@ static atomic_int opfs_ready = 0;
  *  - OPFS is mounted correctly
  *  - file I/O works from within the WASM runtime
  */
-EMSCRIPTEN_KEEPALIVE
 void test_write(const char *msg, const char *name) {
 	char path[256];
 	snprintf(path, sizeof(path), "/opfs/repo/%s", name);
@@ -114,7 +113,6 @@ void* mount_opfs(void* arg){
 /**
 * returns opfs_ready
 **/
-EMSCRIPTEN_KEEPALIVE
 int is_opfs_ready() {
     return atomic_load(&opfs_ready);
 }
@@ -125,7 +123,6 @@ int is_opfs_ready() {
  * This function must be called from JavaScript before any filesystem
  * access through libgit2.
  */
-EMSCRIPTEN_KEEPALIVE
 void mount_opfs_in_thread() {
     pthread_t t;
     pthread_create(&t, NULL, mount_opfs, NULL);
@@ -141,7 +138,6 @@ void mount_opfs_in_thread() {
  *
  * @return Pointer to the output buffer
  */
-EMSCRIPTEN_KEEPALIVE
 char* escape_json_string(const char* input, char* out, size_t out_size) {
     size_t j = 0;
     for (size_t i = 0; input[i] && j < out_size - 1; i++) {
@@ -160,6 +156,11 @@ char* escape_json_string(const char* input, char* out, size_t out_size) {
             if (j + 2 >= out_size) break;
             out[j++] = '\\';
             out[j++] = 't';
+            }
+        else if (c < 0x20) {
+        	if (j + 6 >= out_size) break;
+            snprintf(out + j, out_size - j, "\\u%04x", c);
+            j += 6;
         } else {
             out[j++] = c;
         }
@@ -179,7 +180,6 @@ char* escape_json_string(const char* input, char* out, size_t out_size) {
  *
  * The returned buffer is heap-allocated and must be freed by JavaScript.
  */
-EMSCRIPTEN_KEEPALIVE
 char* get_commit_diff(int i){
 	core_diff_stat_t stats[64];
     size_t count;
@@ -240,7 +240,6 @@ size_t commit_count(){
  *
  * The returned buffer must be freed by JavaScript.
  */
-EMSCRIPTEN_KEEPALIVE
 char *get_commit_info() {
     size_t count = commit_count();
     char *buffer = malloc(8388608);
@@ -314,7 +313,6 @@ int open_repo(const char *name){
  *
  * @return 0 on success, -1 on failure
  */
-EMSCRIPTEN_KEEPALIVE
 int walk_commits(){
 	emscripten_console_log("trying to walk through commits...");
 
