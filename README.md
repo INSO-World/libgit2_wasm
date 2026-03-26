@@ -44,10 +44,11 @@ $env:LIB_ROOT="C:\path\to\libgit2"
 ```
 
 ### 2. Build and start the project
+To run using Webassembly:
 
 **PowerShell (Windows):**
 ```powershell
-$env:LIB_ROOT="C:\path\to\libgit2"
+make run
 ```
 1. Build libgit2 for WebAssembly using Emscripten
 
@@ -56,6 +57,15 @@ $env:LIB_ROOT="C:\path\to\libgit2"
 3. Compile the final WebAssembly and JavaScript glue code
 
 4. Start a local Express server at http://localhost:8080
+
+To run natively:
+**PowerShell (Windows):**
+```powershell
+make native
+```
+1. Build libgit2 using GCC
+
+2. Link the library against the Projects native abstraction and compile to an executable 
 
 
 ## Project structure
