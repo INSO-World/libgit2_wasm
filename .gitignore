@@ -1,4 +1,7 @@
 /src/wasm-build/
+/src/native-build/
 /build/
 /.idea/
 /node_modules/
+/lib-native-build/
+/lib-wasm-build/
