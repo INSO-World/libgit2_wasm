@@ -1,0 +1,21 @@
+{
+  "name": "libgit2-wasm-thesis",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Bachelor thesis project exploring the process and limitations of compiling libgit2 to Webassembly using Emscripten",
+  "scripts": {
+    "start": "node server/server.js"
+  },
+  "keywords": [
+    "Webassembly",
+    "libgit2",
+    "opfs",
+    "wasm",
+    "emscripten"
+  ],
+  "author": "Stefan Ennemoser",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^5.1.0"
+  }
+}

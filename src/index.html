@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+    <div>
+        <h1>Test functions</h1>
+        <label>testwrite</label>
+        <button onclick="testWrite()">test</button>
+    </div>
+    <div>
+        <h1>Files</h1>
+        <div>
+            <h2>File upload</h2>
+            <div>
+                <label for="upload">upload</label>
+                <input id="upload" type="file" webkitdirectory directory multiple required>
+                <button type="submit"  onclick="uploadFile()">submit</button>
+            </div>
+        </div>
+        <div id="file-table"></div>
+        <div id="commit-table"></div>
+    </div>
+    <script type="module" src="./js/main.js">
+    </script>
+</body>
+</html>

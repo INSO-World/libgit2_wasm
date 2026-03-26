@@ -1,0 +1,24 @@
+body{
+    margin: 2rem 4rem;
+}
+
+.file-table-file{
+    width: 100%;
+    background-color: lightgoldenrodyellow;
+    justify-self: center;
+    display: flex;
+    justify-content: space-between;
+}
+
+.diff-table{
+    width: 100%;
+    background-color: beige;
+    justify-self: center;
+    border-collapse: separate;
+    border-spacing: 20px 0;
+
+}
+
+.diff-table th {
+    text-align: start;
+}
