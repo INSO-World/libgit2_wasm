@@ -224,7 +224,6 @@ int main(int argc, char* argv[]){
         return 1;
     }
     int iterations = (argc >= 4) ? atoi(argv[3]) : 1;
-    if(iterations <= 0) iterations = 1;
 
 	char *output_file = argv[2];
 	char runs_file[256];
@@ -254,6 +253,7 @@ int main(int argc, char* argv[]){
 
     fprintf(fruns, "iteration,open_repo_ms,walk_commits_ms,get_commit_info_ms,diff_total_ms\n");
     for (int i = 0; i<iterations; i++) {
+   		printf("iteration: %d\n", i);
     	clock_gettime(CLOCK_MONOTONIC,&t0);
         if(open_repo(argv[1])) break;
         clock_gettime(CLOCK_MONOTONIC,&t1);

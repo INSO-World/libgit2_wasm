@@ -79,11 +79,12 @@ build-native: configure-native
 	cd "$(NATIVE_BUILD_DIR)" && make VERBOSE=1
 
 native: build-native
+	if not exist "src\native-build" mkdir "src\native-build"
 	gcc -Wall $(NATIVE_SRC) \
 		$(NATIVE_LIBGIT2_A) \
 		-I "$(LIB_ROOT)/include" \
-		-$(OPT) \
 		-o $(NATIVE_OUTPUT) \
+		-$(OPT) \
 		-lsecur32 \
 		-lws2_32 \
 		-Wl,--allow-multiple-definition
@@ -91,3 +92,5 @@ native: build-native
 
 run: wasm
 	npm start
+
+

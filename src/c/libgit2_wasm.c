@@ -185,7 +185,7 @@ char* get_commit_diff(int i){
     size_t count;
 
     if(core_get_commit_diff_stats(i, stats, 64, &count) < 0){
-    	emscripten_console_error("There was an error calculating diff");
+    	print_error("There was an error calculating diff");
     	return NULL;
     }
 
@@ -193,7 +193,7 @@ char* get_commit_diff(int i){
     size_t bufsize = 65536;
     char* buffer = malloc(bufsize);
     if (!buffer){
-            emscripten_console_error("error allocating memory to buffer");
+            print_error("error allocating memory to buffer");
             return NULL;
     }
     buffer[0] = '\0';

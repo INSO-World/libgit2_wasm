@@ -301,7 +301,6 @@ async function showFiles(repos){
     console.table(bench.setup);
 })();
 
-
 /**
  * Async function that waits for mounting to finish by periodically polling the state.
  *
@@ -330,14 +329,14 @@ async function waitForMount(timeoutMs = 5000) {
  * @param bench benchmarking of libgit2 functionality on the repository
  */
 
-function downloadCSV(bench) {
+function downloadCSV(bench, name) {
     const header_bench = "iteration,open_repo_ms,walk_commits_ms,get_commit_info_ms,diff_total_ms";
-    const header_setup = "init, mount";
+    const header_setup = "wasmLoad, init, mount";
     const rows_bench = bench.runs.map((run, i) =>
         `${i},${run.openRepo.toFixed(3)},${run.walkCommits.toFixed(3)},${run.getCommitInfo.toFixed(3)},${run.diff.toFixed(3)}`
     );
 
-    const rows_setup = `${bench.setup.init.toFixed(3)},${bench.setup.mount.toFixed(3)}`;
+    const rows_setup = `${bench.setup.wasmLoad.toFixed(3)},${bench.setup.init.toFixed(3)},${bench.setup.mount.toFixed(3)}`;
 
     const csv_bench = [header_bench, ...rows_bench].join("\n");
     const blob_bench = new Blob([csv_bench], { type: "text/csv" });
@@ -345,7 +344,7 @@ function downloadCSV(bench) {
 
     const a_bench = document.createElement("a");
     a_bench.href = url_bench;
-    a_bench.download = "bench_results.csv";
+    a_bench.download = name + "_bench_results.csv";
     a_bench.click();
     URL.revokeObjectURL(url_bench);
 
@@ -355,46 +354,34 @@ function downloadCSV(bench) {
 
     const a_setup = document.createElement("a");
     a_setup.href = url_setup;
-    a_setup.download = "setup_results.csv";
+    a_setup.download = name + "_setup_results.csv";
     a_setup.click();
     URL.revokeObjectURL(url_setup);
 }
 
-export async function runBenchmark(repoPath, iterations = 100) {
-    bench.runs = [];
-    bench.iterations = iterations;
-    for (let i = 0; i < iterations; i++) {
-        const run = {};
+async function runBenchmark(repoPath, iterations = 10) {
+    const worker = new Worker(
+        new URL('./benchmarkWorker.js', import.meta.url),
+        { type: 'module' }
+    );
 
-        const t0 = performance.now();
-        const openRes = LibGit2Module.ccall("open_repo", "int", ["string"], [repoPath]);
-        run.openRepo = performance.now() - t0;
-        if (openRes !== 0) break;
+    worker.postMessage({ repoPath, iterations });
 
-        const t1 = performance.now();
-        const walkRes = LibGit2Module.ccall("walk_commits", "int", [], []);
-        run.walkCommits = performance.now() - t1;
-        if (walkRes !== 0) break;
-
-        const t2 = performance.now();
-        const infoPtr = LibGit2Module.ccall("get_commit_info", "number", [], []);
-        LibGit2Module._free(infoPtr);
-        run.getCommitInfo = performance.now() - t2;
-
-        const t3 = performance.now();
-        const commitCount = LibGit2Module.ccall("commit_count", "int", [], []);
-        for (let c = 0; c < commitCount; c++) {
-
-            const diffPtr = LibGit2Module.ccall("get_commit_diff", "number", ["int"], [c]);
-            LibGit2Module._free(diffPtr);
-
+    worker.onmessage = (e) => {
+        if (e.data.type === 'complete') {
+            const bench = e.data.bench;
+            downloadCSV(bench);
+            worker.terminate();
         }
-        run.diff = performance.now() - t3;
-        bench.runs.push(run);
-    }
-    downloadCSV(bench);
-    return bench;
+    };
+
+    worker.onerror = (e) => {
+        console.error('Benchmark worker error:', e);
+        worker.terminate();
+    };
 }
+
+
 
 
 
