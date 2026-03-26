@@ -71,6 +71,10 @@ project-root/
 │  │  ├─ opfs/                 # OPFS file handling
 │  │  │  └─ opfsStorage.js
 │  │  │
+│  │  ├─ benchmarkWorker.js    # Worker thread used for benchmarking
+│  │  │ 
+│  │  ├─ config.js             # configuration for main.js
+│  │  │ 
 │  │  └─ main.js               # Application entry point
 │  │
 │  └─ index.html
